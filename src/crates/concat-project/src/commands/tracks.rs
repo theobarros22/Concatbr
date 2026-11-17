@@ -29,7 +29,7 @@ pub(super) fn apply(
             if bottom {
                 timeline.tracks.insert(0, track);
             } else {
-                timeline.tracks.push(track);
+                push_track_below_vollare_top(&mut timeline.tracks, track);
             }
             Ok(Outcome {
                 created_id: Some(id),

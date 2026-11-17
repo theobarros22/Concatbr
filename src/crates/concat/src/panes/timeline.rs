@@ -197,6 +197,17 @@ impl TimelinePane {
             TimelineMsg::Reset => {
                 self.scroll_left = 0.0;
                 self.lane_view.clear();
+                for track in &studio.timeline().tracks {
+                    if track.is_vollare_locked() {
+                        self.lane_view.insert(
+                            track.id.clone(),
+                            LaneView {
+                                locked: true,
+                                size: TrackSize::Auto,
+                            },
+                        );
+                    }
+                }
                 self.recentre(studio.playhead);
             }
         }

@@ -231,6 +231,16 @@ impl Default for Track {
     }
 }
 
+impl Track {
+    /// True when marked locked by Super Motor Vollare (`vollareLocked: true`, e.g. AI seal lane).
+    pub fn is_vollare_locked(&self) -> bool {
+        self.extra
+            .get("vollareLocked")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+}
+
 /// One applied audio filter or video effect: a catalogue id plus whatever
 /// parameters were set. The catalogues themselves (and the FFmpeg strings
 /// they build) live in the UI today; the model only stores the numbers.
@@ -1783,6 +1793,19 @@ impl Clip {
                 .then_with(|| a.at.total_cmp(&b.at))
         });
     }
+
+    /// True when protected by Super Motor Vollare (`vollareTravado: true` or `vollareTipo: "selo_ia"`).
+    pub fn is_vollare_locked(&self) -> bool {
+        self.extra
+            .get("vollareTravado")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+            || self
+                .extra
+                .get("vollareTipo")
+                .and_then(Value::as_str)
+                .is_some_and(|t| t == "selo_ia")
+    }
 }
 
 /// One timeline: a name and its lanes and clips. Every operation takes the
@@ -1828,6 +1851,20 @@ impl Default for Timeline {
             clips: Vec::new(),
             extra: Map::new(),
         }
+    }
+}
+
+impl Timeline {
+    /// True when `clip_id` is itself locked by Vollare or sits on a Vollare-locked lane.
+    pub fn is_clip_vollare_locked(&self, clip_id: &str) -> bool {
+        let Some(clip) = self.clips.iter().find(|c| c.id == clip_id) else {
+            return false;
+        };
+        clip.is_vollare_locked()
+            || self
+                .tracks
+                .iter()
+                .any(|t| t.id == clip.track_id && t.is_vollare_locked())
     }
 }
 

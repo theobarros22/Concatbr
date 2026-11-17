@@ -4530,4 +4530,179 @@ mod tests {
             .expect("no-op");
         assert!(!off.applied);
     }
+
+    #[test]
+    fn vollare_locked_seal_and_metadata_roundtrip_and_refuse_tampering() {
+        let doc = json!({
+            "concat": "0.1.0",
+            "version": 1,
+            "name": "vollare_teste",
+            "video": { "width": 1080, "height": 1920, "rateNum": 30, "rateDen": 1 },
+            "media": [],
+            "tracks": [
+                { "id": "T1", "visible": true, "muted": false, "vollareTrilha": "fundos", "vollareLocked": false },
+                { "id": "T2", "visible": true, "muted": false, "vollareTrilha": "titulos", "vollareLocked": false },
+                { "id": "T3", "visible": true, "muted": false, "vollareTrilha": "integridade", "vollareLocked": true }
+            ],
+            "clips": [
+                {
+                    "id": "c_tit_1",
+                    "trackId": "T2",
+                    "mediaId": "",
+                    "name": "MANCHETE",
+                    "kind": "text",
+                    "start": 0.0,
+                    "duration": 3.0,
+                    "opacity": 1.0,
+                    "text": { "content": "MANCHETE" },
+                    "vollareId": "tit_1",
+                    "vollareTipo": "titulo",
+                    "vollareTravado": false
+                },
+                {
+                    "id": "c_int_selo",
+                    "trackId": "T3",
+                    "mediaId": "",
+                    "name": "VÍDEO GERADO POR IA",
+                    "kind": "text",
+                    "start": 0.0,
+                    "duration": 6.0,
+                    "opacity": 0.92,
+                    "text": { "content": "VÍDEO GERADO POR IA" },
+                    "vollareId": "int_selo",
+                    "vollareTipo": "selo_ia",
+                    "vollareTravado": true
+                }
+            ],
+            "fonts": [],
+            "timelines": [
+                {
+                    "id": "TL1",
+                    "name": "vollare_teste (9:16)",
+                    "video": { "width": 1080, "height": 1920, "rateNum": 30, "rateDen": 1 },
+                    "tracks": [
+                        { "id": "T1", "visible": true, "muted": false, "vollareTrilha": "fundos", "vollareLocked": false },
+                        { "id": "T2", "visible": true, "muted": false, "vollareTrilha": "titulos", "vollareLocked": false },
+                        { "id": "T3", "visible": true, "muted": false, "vollareTrilha": "integridade", "vollareLocked": true }
+                    ],
+                    "clips": [
+                        {
+                            "id": "c_tit_1",
+                            "trackId": "T2",
+                            "mediaId": "",
+                            "name": "MANCHETE",
+                            "kind": "text",
+                            "start": 0.0,
+                            "duration": 3.0,
+                            "opacity": 1.0,
+                            "text": { "content": "MANCHETE" },
+                            "vollareId": "tit_1",
+                            "vollareTipo": "titulo",
+                            "vollareTravado": false
+                        },
+                        {
+                            "id": "c_int_selo",
+                            "trackId": "T3",
+                            "mediaId": "",
+                            "name": "VÍDEO GERADO POR IA",
+                            "kind": "text",
+                            "start": 0.0,
+                            "duration": 6.0,
+                            "opacity": 0.92,
+                            "text": { "content": "VÍDEO GERADO POR IA" },
+                            "vollareId": "int_selo",
+                            "vollareTipo": "selo_ia",
+                            "vollareTravado": true
+                        }
+                    ]
+                }
+            ],
+            "activeTimelineId": "TL1",
+            "vollareMeta": { "projeto": "vollare_teste", "fps": 30 }
+        });
+
+        let mut editor = Editor::from_document(&doc).expect("loads Vollare concat.json");
+
+        // Unlocked Vollare clips edit freely.
+        editor
+            .apply(Command::TrimClip {
+                clip_id: "c_tit_1".to_owned(),
+                edge: TrimEdge::End,
+                delta: 1.0,
+                ripple: false,
+            })
+            .expect("unlocked clip trims");
+
+        // Protected AI seal clip and locked integrity lane reject every destructive edit.
+        for forbidden in [
+            Command::RemoveClips {
+                clip_ids: vec!["c_int_selo".to_owned()],
+                ripple: false,
+            },
+            Command::TrimClip {
+                clip_id: "c_int_selo".to_owned(),
+                edge: TrimEdge::End,
+                delta: -1.0,
+                ripple: false,
+            },
+            Command::SplitClips {
+                clip_ids: vec!["c_int_selo".to_owned()],
+                time: 2.0,
+            },
+            Command::MoveClips {
+                moves: vec![ClipMove {
+                    clip_id: "c_int_selo".to_owned(),
+                    start: 1.0,
+                    track_id: "T2".to_owned(),
+                }],
+            },
+            Command::MoveClips {
+                moves: vec![ClipMove {
+                    clip_id: "c_tit_1".to_owned(),
+                    start: 1.0,
+                    track_id: "T3".to_owned(),
+                }],
+            },
+            Command::UpdateClip {
+                clip_id: "c_int_selo".to_owned(),
+                patch: ClipPatch {
+                    opacity: Some(0.0),
+                    ..ClipPatch::default()
+                },
+            },
+            Command::RemoveTrack {
+                track_id: "T3".to_owned(),
+            },
+            Command::SetTrackFlag {
+                track_id: "T3".to_owned(),
+                flag: TrackFlag::Visible,
+                value: false,
+            },
+        ] {
+            assert_eq!(
+                editor.apply(forbidden),
+                Err(crate::CommandError::VollareLocked)
+            );
+        }
+
+        // Adding a new top track inserts it BELOW T3 so the mandatory AI seal stays on top.
+        let added = editor
+            .apply(Command::AddTrack { bottom: false })
+            .expect("adds user track")
+            .created_id
+            .expect("minted track id");
+        let track_ids: Vec<&str> = editor
+            .project()
+            .active()
+            .tracks
+            .iter()
+            .map(|t| t.id.as_str())
+            .collect();
+        assert_eq!(track_ids.last(), Some(&"T3"));
+        assert_eq!(track_ids[track_ids.len() - 2], added.as_str());
+
+        // Saving back preserves Vollare metadata intact.
+        let saved = crate::doc::to_document(&settings(), editor.project());
+        assert_eq!(saved["vollareMeta"]["projeto"], "vollare_teste");
+    }
 }

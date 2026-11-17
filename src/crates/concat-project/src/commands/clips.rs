@@ -786,19 +786,22 @@ fn first_free_track(timeline: &Timeline, start: f64, duration: f64) -> Option<St
     timeline
         .tracks
         .iter()
-        .find(|track| timeline.is_free(&track.id, start, duration, &[]))
+        .find(|track| !track.is_vollare_locked() && timeline.is_free(&track.id, start, duration, &[]))
         .map(|track| track.id.clone())
 }
 
-/// A new, empty lane at the top, for a clip with nowhere else to go.
+/// A new, empty lane at the top (below any trailing Vollare-locked lanes), for a clip with nowhere else to go.
 fn fresh_track(timeline: &mut Timeline, mint: &mut IdMint) -> String {
     let id = mint.next("t");
-    timeline.tracks.push(Track {
-        id: id.clone(),
-        visible: true,
-        muted: false,
-        extra: Default::default(),
-    });
+    push_track_below_vollare_top(
+        &mut timeline.tracks,
+        Track {
+            id: id.clone(),
+            visible: true,
+            muted: false,
+            extra: Default::default(),
+        },
+    );
     id
 }
 
@@ -820,7 +823,7 @@ fn first_free_track_above(timeline: &Timeline, start: f64, duration: f64) -> Opt
         .tracks
         .iter()
         .enumerate()
-        .filter(|(_, track)| occupied(&track.id))
+        .filter(|(_, track)| !track.is_vollare_locked() && occupied(&track.id))
         .map(|(row, _)| row + 1)
         .max()
         .unwrap_or(0);
@@ -828,7 +831,7 @@ fn first_free_track_above(timeline: &Timeline, start: f64, duration: f64) -> Opt
         .tracks
         .iter()
         .skip(floor)
-        .find(|track| !occupied(&track.id))
+        .find(|track| !track.is_vollare_locked() && !occupied(&track.id))
         .map(|track| track.id.clone())
 }
 

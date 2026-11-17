@@ -792,6 +792,9 @@ pub enum CommandError {
     /// one stored would poison every duration and key that touched it.
     #[error("A number in that edit is not finite.")]
     NotANumber,
+    /// An edit tried to alter or remove an item protected by Super Motor Vollare (e.g. AI seal).
+    #[error("This item is locked by Vollare (AI integrity seal or protected layer) and cannot be modified.")]
+    VollareLocked,
 }
 
 /// Mints ids. Owned by the editor so restored projects advance it past every
@@ -1035,6 +1038,102 @@ fn assign<T: PartialEq>(slot: &mut T, value: T) -> bool {
     }
 }
 
+/// Inserts a newly created ordinary track at the top of user tracks, while
+/// keeping any trailing Vollare-locked lanes (such as the mandatory AI seal)
+/// above it so user clips can never cover the integrity layer.
+pub(super) fn push_track_below_vollare_top(tracks: &mut Vec<Track>, track: Track) {
+    let mut index = tracks.len();
+    while index > 0 && tracks[index - 1].is_vollare_locked() {
+        index -= 1;
+    }
+    tracks.insert(index, track);
+}
+
+fn check_vollare_lock(project: &Project, command: &Command) -> Result<(), CommandError> {
+    let timeline = project.active();
+    let track_locked = |tid: &str| {
+        timeline
+            .tracks
+            .iter()
+            .any(|t| t.id == tid && t.is_vollare_locked())
+    };
+    match command {
+        Command::AddClip { track_id, .. } if track_locked(track_id) => {
+            Err(CommandError::VollareLocked)
+        }
+        Command::AddTextClip {
+            track_id: Some(tid),
+            ..
+        }
+        | Command::AddShapeClip {
+            track_id: Some(tid),
+            ..
+        }
+        | Command::AddLayerClip {
+            track_id: Some(tid),
+            ..
+        } if track_locked(tid) => Err(CommandError::VollareLocked),
+        Command::MoveClips { moves }
+            if moves.iter().any(|m| {
+                timeline.is_clip_vollare_locked(&m.clip_id) || track_locked(&m.track_id)
+            }) =>
+        {
+            Err(CommandError::VollareLocked)
+        }
+        Command::TrimClip { clip_id, .. }
+        | Command::ReplaceClipMedia { clip_id, .. }
+        | Command::SetClipEnhanced { clip_id, .. }
+        | Command::FreezeFrame { clip_id, .. }
+        | Command::UpdateClip { clip_id, .. }
+        | Command::SetClipSpeed { clip_id, .. }
+        | Command::SetClipCutout { clip_id, .. }
+        | Command::AddCutoutStroke { clip_id, .. }
+        | Command::SetClipKey { clip_id, .. }
+        | Command::ClearClipKey { clip_id, .. }
+        | Command::ClearClipKeys { clip_id, .. }
+        | Command::SetEffectKey { clip_id, .. }
+        | Command::ClearEffectKey { clip_id, .. }
+        | Command::ClearEffectKeys { clip_id, .. }
+        | Command::SetClipSpeedCurve { clip_id, .. }
+        | Command::SetClipTransform { clip_id, .. }
+        | Command::DetachAudio { clip_id }
+        | Command::ReattachAudio { clip_id }
+            if timeline.is_clip_vollare_locked(clip_id) =>
+        {
+            Err(CommandError::VollareLocked)
+        }
+        Command::SplitClips { clip_ids, .. }
+        | Command::MergeClips { clip_ids }
+        | Command::ConsolidateClips { clip_ids, .. }
+        | Command::RemoveClips { clip_ids, .. }
+            if clip_ids
+                .iter()
+                .any(|cid| timeline.is_clip_vollare_locked(cid)) =>
+        {
+            Err(CommandError::VollareLocked)
+        }
+        Command::RemoveTrack { track_id } | Command::SetTrackFlag { track_id, .. }
+            if track_locked(track_id)
+                || timeline
+                    .clips
+                    .iter()
+                    .any(|c| c.track_id == *track_id && c.is_vollare_locked()) =>
+        {
+            Err(CommandError::VollareLocked)
+        }
+        Command::RemoveMedia { media_id }
+            if project.timelines.iter().any(|tl| {
+                tl.clips
+                    .iter()
+                    .any(|c| c.media_id == *media_id && tl.is_clip_vollare_locked(&c.id))
+            }) =>
+        {
+            Err(CommandError::VollareLocked)
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Applies one command. Errors are [`CommandError`]s, each rendering as a
 /// user-meaningful sentence; a command that legitimately does nothing (a
 /// no-op rename, an out-of-range split) returns Ok with no created id and
@@ -1047,6 +1146,7 @@ pub fn apply(
     if command.has_non_finite() {
         return Err(CommandError::NotANumber);
     }
+    check_vollare_lock(project, &command)?;
     match command {
         Command::Batch { commands } => {
             // All or nothing: apply to a staged copy and commit only a fully
