@@ -1806,6 +1806,31 @@ impl Clip {
                 .and_then(Value::as_str)
                 .is_some_and(|t| t == "selo_ia")
     }
+
+    /// Compact provenance/lock badge label for Vollare timeline clips, or `""` for standard Concat clips.
+    pub fn vollare_badge(&self, track_locked: bool) -> &'static str {
+        let is_selo = self
+            .extra
+            .get("vollareTipo")
+            .and_then(Value::as_str)
+            .is_some_and(|t| t == "selo_ia");
+        let origem = self.extra.get("vollareOrigem").and_then(Value::as_str);
+        if is_selo {
+            "IA · TRAVADO"
+        } else if self.is_vollare_locked() || track_locked {
+            if origem == Some("gerado") {
+                "IA · TRAVADO"
+            } else {
+                "TRAVADO"
+            }
+        } else {
+            match origem {
+                Some("humano") => "HUMANO",
+                Some("gerado") => "IA",
+                _ => "",
+            }
+        }
+    }
 }
 
 /// One timeline: a name and its lanes and clips. Every operation takes the
@@ -1865,6 +1890,19 @@ impl Timeline {
                 .tracks
                 .iter()
                 .any(|t| t.id == clip.track_id && t.is_vollare_locked())
+    }
+
+    /// Horizontal caption safe-zone guides `(top, bottom)` (`0.62..0.86`) for vertical (`9:16`) Vollare timelines.
+    pub fn vollare_caption_safe_guides(&self, project_is_vollare: bool) -> Option<(f32, f32)> {
+        let is_vollare = project_is_vollare
+            || self.extra.contains_key("vollareEdl")
+            || self.tracks.iter().any(Track::is_vollare_locked)
+            || self.clips.iter().any(|c| c.is_vollare_locked());
+        if is_vollare && self.video.height > self.video.width {
+            Some((0.62, 0.86))
+        } else {
+            None
+        }
     }
 }
 
@@ -2122,6 +2160,16 @@ impl Project {
                 path: item.path.clone(),
             })
             .collect()
+    }
+
+    /// True when this project carries Super Motor Vollare metadata (`vollareMeta`, `vollareEdl`, or locked lanes/clips).
+    pub fn has_vollare_meta(&self) -> bool {
+        self.extra.contains_key("vollareMeta")
+            || self.timelines.iter().any(|t| {
+                t.extra.contains_key("vollareEdl")
+                    || t.tracks.iter().any(Track::is_vollare_locked)
+                    || t.clips.iter().any(|c| c.is_vollare_locked())
+            })
     }
 }
 

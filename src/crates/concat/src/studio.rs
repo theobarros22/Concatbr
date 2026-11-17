@@ -5452,6 +5452,14 @@ impl Studio {
                         // staying put.
                         let mut xs = vec![0.0, 0.5, 1.0];
                         let mut ys = vec![0.0, 0.5, 1.0];
+                        if let Some((y0, y1)) = self
+                            .editor
+                            .project()
+                            .active()
+                            .vollare_caption_safe_guides(self.editor.project().has_vollare_meta())
+                        {
+                            ys.extend([f64::from(y0), f64::from(y1)]);
+                        }
                         for other in self.stage_clips() {
                             if origins.iter().any(|origin| origin.clip == other.id) {
                                 continue;
@@ -5468,6 +5476,7 @@ impl Studio {
                             self.stage_guides.push(StageGuideData {
                                 vertical: true,
                                 at: at as f32,
+                                safe_zone: false,
                             });
                         }
                         if let Some((shift, at)) =
@@ -5477,6 +5486,7 @@ impl Studio {
                             self.stage_guides.push(StageGuideData {
                                 vertical: false,
                                 at: at as f32,
+                                safe_zone: false,
                             });
                         }
                     }
@@ -5518,6 +5528,14 @@ impl Studio {
                     let (cx, cy) = (centre.0 / f64::from(width), centre.1 / f64::from(height));
                     let mut xs = vec![0.0, 0.5, 1.0];
                     let mut ys = vec![0.0, 0.5, 1.0];
+                    if let Some((y0, y1)) = self
+                        .editor
+                        .project()
+                        .active()
+                        .vollare_caption_safe_guides(self.editor.project().has_vollare_meta())
+                    {
+                        ys.extend([f64::from(y0), f64::from(y1)]);
+                    }
                     for other in self.stage_clips() {
                         if other.id == *clip {
                             continue;
@@ -5557,6 +5575,7 @@ impl Studio {
                         self.stage_guides.push(StageGuideData {
                             vertical,
                             at: at as f32,
+                            safe_zone: false,
                         });
                     }
                 }
@@ -7770,6 +7789,12 @@ impl Studio {
                         } else {
                             Default::default()
                         };
+                    let track_vollare_locked = timeline
+                        .tracks
+                        .iter()
+                        .any(|t| t.id == clip.track_id && t.is_vollare_locked());
+                    let vollare_locked = clip.is_vollare_locked() || track_vollare_locked;
+                    let vollare_badge = clip.vollare_badge(track_vollare_locked);
                     ClipData {
                         id: clip.id.as_str().into(),
                         name: clip.name.as_str().into(),
@@ -7801,6 +7826,8 @@ impl Studio {
                         wave_span: wave.2,
                         has_audio: self.clip_has_sound(clip),
                         strip: self.strip_of(clip),
+                        vollare_locked,
+                        vollare_badge: vollare_badge.into(),
                     }
                 })
                 .collect(),
@@ -7831,7 +7858,22 @@ impl Studio {
         editor.set_playing(self.playing);
         self.publish_frame(app);
         sync(&models.stage, self.stage_items());
-        sync(&models.guides, self.stage_guides.clone());
+        let mut guides = self.stage_guides.clone();
+        if let Some((y0, y1)) =
+            timeline.vollare_caption_safe_guides(self.editor.project().has_vollare_meta())
+        {
+            guides.push(StageGuideData {
+                vertical: false,
+                at: y0,
+                safe_zone: true,
+            });
+            guides.push(StageGuideData {
+                vertical: false,
+                at: y1,
+                safe_zone: true,
+            });
+        }
+        sync(&models.guides, guides);
         let (path, width, erase) = self.stroke_overlay();
         editor.set_stroke_path(path.into());
         editor.set_stroke_width(width);

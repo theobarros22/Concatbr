@@ -481,7 +481,7 @@ component Guide inherits Rectangle {
             : root.guide.at * root.height - 0.5px;
         width: root.guide.vertical ? 1px : root.dash;
         height: root.guide.vertical ? root.dash : 1px;
-        background: Theme.accent;
+        background: root.guide.safe-zone ? #f5c54259 : Theme.accent;
     }
 }
 

@@ -4705,4 +4705,75 @@ mod tests {
         let saved = crate::doc::to_document(&settings(), editor.project());
         assert_eq!(saved["vollareMeta"]["projeto"], "vollare_teste");
     }
+
+    #[test]
+    fn vollare_badges_and_vertical_safe_zone_guides() {
+        let doc = serde_json::json!({
+            "version": 1,
+            "name": "vollare_ui",
+            "output": {"format": "mp4", "videoCodec": "h264", "audioCodec": "aac", "crf": 18, "audioBitrate": 192},
+            "media": [],
+            "fonts": [],
+            "activeTimelineId": "TL1",
+            "vollareMeta": {"projeto": "vollare_ui", "motor": "html"},
+            "timelines": [
+                {
+                    "id": "TL1",
+                    "name": "Vollare 9:16",
+                    "video": {"width": 1080, "height": 1920, "rateNum": 30, "rateDen": 1, "colorSpace": "sdr"},
+                    "tracks": [
+                        {"id": "T1", "name": "titulos"},
+                        {"id": "T2", "name": "integridade", "vollareLocked": true}
+                    ],
+                    "clips": [
+                        {
+                            "id": "c_humano", "trackId": "T1", "kind": "text", "name": "Manual",
+                            "start": 0.0, "duration": 2.0, "text": {"content": "MANUAL"},
+                            "vollareOrigem": "humano", "vollareTravado": false
+                        },
+                        {
+                            "id": "c_ia", "trackId": "T1", "kind": "text", "name": "Auto",
+                            "start": 2.0, "duration": 2.0, "text": {"content": "AUTO"},
+                            "vollareOrigem": "gerado", "vollareTravado": false
+                        },
+                        {
+                            "id": "c_selo", "trackId": "T2", "kind": "text", "name": "Selo",
+                            "start": 0.0, "duration": 4.0, "text": {"content": "VÍDEO GERADO POR IA"},
+                            "vollareTipo": "selo_ia", "vollareOrigem": "gerado", "vollareTravado": true
+                        }
+                    ]
+                },
+                {
+                    "id": "TL2",
+                    "name": "Vollare 16:9",
+                    "video": {"width": 1920, "height": 1080, "rateNum": 30, "rateDen": 1, "colorSpace": "sdr"},
+                    "tracks": [{"id": "W1", "name": "titulos"}],
+                    "clips": []
+                }
+            ]
+        });
+
+        let editor = Editor::from_document(&doc).expect("loads Vollare UI doc");
+        let project = editor.project();
+        assert!(project.has_vollare_meta());
+
+        let tl_9x16 = &project.timelines[0];
+        assert_eq!(
+            tl_9x16.vollare_caption_safe_guides(project.has_vollare_meta()),
+            Some((0.62, 0.86))
+        );
+        assert_eq!(tl_9x16.clip("c_humano").unwrap().vollare_badge(false), "HUMANO");
+        assert_eq!(tl_9x16.clip("c_ia").unwrap().vollare_badge(false), "IA");
+        assert_eq!(tl_9x16.clip("c_selo").unwrap().vollare_badge(true), "IA · TRAVADO");
+
+        let tl_16x9 = &project.timelines[1];
+        assert_eq!(
+            tl_16x9.vollare_caption_safe_guides(project.has_vollare_meta()),
+            None
+        );
+
+        let plain = Project::new();
+        assert!(!plain.has_vollare_meta());
+        assert_eq!(plain.active().vollare_caption_safe_guides(false), None);
+    }
 }

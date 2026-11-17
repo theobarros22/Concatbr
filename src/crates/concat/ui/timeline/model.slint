@@ -130,6 +130,10 @@ export struct ClipData {
     /// The frames a picture clip tiles along its body; `frames` is 0 when
     /// there are none yet.
     strip: StripData,
+    /// True when this clip (or its lane) is locked by Super Motor Vollare (`selo_ia` / `travado`).
+    vollare-locked: bool,
+    /// Provenance/lock badge label (`"IA · TRAVADO"`, `"TRAVADO"`, `"IA"`, `"HUMANO"`, or `""`).
+    vollare-badge: string,
 }
 
 
@@ -434,4 +438,6 @@ export struct StageGuideData {
     /// Where the line is, as a fraction of the frame's width (vertical) or
     /// height (horizontal).
     at: float,
+    /// True for persistent Vollare 9:16 caption safe-zone framing lines (`0.62..0.86`).
+    safe-zone: bool,
 }

@@ -235,6 +235,9 @@ component Clip inherits Rectangle {
     /// Its lane is locked. Rust refuses the gestures either way; this is so
     /// the clip says why before you try, rather than feeling broken.
     in property <bool> locked;
+    property <bool> show-fx: root.item.fx && root.width > 60px;
+    property <bool> show-vollare: root.item.vollare-badge != "" && root.width > 92px;
+    property <length> vollare-w: root.item.vollare-locked ? 74px : 50px;
 
     // Neither `opacity` nor a rounded `clip` here, however much both would
     // suit. A clip element is as wide as its clip is long: ten minutes at
@@ -444,8 +447,11 @@ component Clip inherits Rectangle {
         if root.width > 30px: Text {
             x: root.text-x;
             y: 0;
-            width: parent.width - root.text-x - 7px
-                - (root.item.fx && root.width > 60px ? root.chip-w + 6px : 0px);
+            width: Math.max(
+                0px,
+                parent.width - root.text-x - 7px
+                    - (root.show-fx ? root.chip-w + 6px : 0px)
+                    - (root.show-vollare ? root.vollare-w + 6px : 0px));
             height: parent.height;
             text: root.item.name;
             color: Theme.clip-ink;
@@ -465,9 +471,33 @@ component Clip inherits Rectangle {
             px-per-second: root.px-per-second;
         }
 
+        // Vollare provenance / mandatory AI seal badge (`IA · TRAVADO`, `IA`, `HUMANO`).
+        if root.show-vollare: Rectangle {
+            x: parent.width - self.width - 4px
+                - (root.show-fx ? root.chip-w + 4px : 0px);
+            y: (parent.height - self.height) / 2;
+            width: root.vollare-w;
+            height: root.chip;
+            border-radius: Theme.r-xs;
+            background: root.item.vollare-locked ? #b45309e6 : Theme.clip-chip;
+
+            Text {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                text: root.item.vollare-badge;
+                color: Theme.clip-ink;
+                font-size: Math.max(8px, root.chip * 0.5);
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+
         // An `fx` chip when effects are live on the clip, so a styled clip is
         // tellable from a plain one without opening a panel.
-        if root.item.fx && root.width > 60px: Rectangle {
+        if root.show-fx: Rectangle {
             x: parent.width - self.width - 4px;
             y: (parent.height - self.height) / 2;
             width: root.chip-w;
@@ -1444,10 +1474,9 @@ export component Lanes inherits Rectangle {
             viewport-width: parent.width;
             tool: root.tool;
             edge-grab: root.edge-grab;
-            // Read back through the lane the clip sits on rather than carried
-            // on the clip: locking is a property of the lane, and copying it
-            // onto every clip would be one more thing to keep in step.
-            locked: root.tracks[entry.row].locked;
+            // Read back through the lane the clip sits on, plus per-clip Vollare
+            // integrity locks (`selo_ia` / `vollareTravado`).
+            locked: root.tracks[entry.row].locked || entry.vollare-locked;
 
             // A press is not yet a drag: the edge scroll waits for the
             // first report of one, which brings the pointer with it. Set
