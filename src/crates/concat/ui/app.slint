@@ -165,6 +165,8 @@ export component App inherits Window {
     // the library callbacks above.
     in property <string> project-name: I18n.t("common.untitledProject");
     in property <string> project-status: I18n.t("common.saved");
+    in property <bool> vollare-project;
+    callback vollare-sync-clicked();
     in property <bool> macos;
     /// The window is a phone's: one screen, held upright, driven by a
     /// finger. The editor is then the phone shell (ui/phone/) - no title
@@ -652,6 +654,8 @@ export component App inherits Window {
                 open-settings => { root.open-settings(); }
                 add-pane(kind) => { Editor.dock-add(kind); }
                 export-clicked => { root.export-clicked(); }
+                vollare-project: root.vollare-project;
+                vollare-sync-clicked => { root.vollare-sync-clicked(); }
             }
 
             if root.on-start: StartScreen {

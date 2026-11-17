@@ -4715,7 +4715,7 @@ mod tests {
             "media": [],
             "fonts": [],
             "activeTimelineId": "TL1",
-            "vollareMeta": {"projeto": "vollare_ui", "motor": "html"},
+            "vollareMeta": {"projeto": "vollare_ui", "motor": "html", "edlPath": "/proj/edl.json"},
             "timelines": [
                 {
                     "id": "TL1",
@@ -4756,6 +4756,7 @@ mod tests {
         let editor = Editor::from_document(&doc).expect("loads Vollare UI doc");
         let project = editor.project();
         assert!(project.has_vollare_meta());
+        assert_eq!(project.vollare_edl_path(), Some("/proj/edl.json"));
 
         let tl_9x16 = &project.timelines[0];
         assert_eq!(
@@ -4774,6 +4775,7 @@ mod tests {
 
         let plain = Project::new();
         assert!(!plain.has_vollare_meta());
+        assert_eq!(plain.vollare_edl_path(), None);
         assert_eq!(plain.active().vollare_caption_safe_guides(false), None);
     }
 }

@@ -2171,6 +2171,15 @@ impl Project {
                     || t.clips.iter().any(|c| c.is_vollare_locked())
             })
     }
+
+    /// Optional canonical `edl.json` path recorded inside `vollareMeta.edlPath` by `vollare concat exportar`.
+    pub fn vollare_edl_path(&self) -> Option<&str> {
+        self.extra
+            .get("vollareMeta")
+            .and_then(|v| v.get("edlPath"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+    }
 }
 
 impl MediaItem {

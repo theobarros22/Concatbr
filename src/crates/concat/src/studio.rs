@@ -2608,6 +2608,82 @@ impl Studio {
         );
     }
 
+    /// Saves `concat.json` and, when a linked Vollare `edl.json` is found, imports human edits
+    /// back into `edl.json` via `python -m vollare concat importar`.
+    pub fn sync_vollare_edl(&mut self) {
+        let edl_hint = self
+            .editor
+            .project()
+            .vollare_edl_path()
+            .map(std::path::PathBuf::from);
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        self.autosave.stop();
+        let (path, document) = session.prepare_save(None);
+        self.dirty = false;
+        spawn(
+            move || -> Result<String, String> {
+                projects::save(&path, &document)?;
+                let concat_path = std::path::PathBuf::from(&path);
+                let mut cands = Vec::new();
+                if let Some(explicit) = edl_hint {
+                    cands.push(explicit);
+                }
+                if let Some(dir) = concat_path.parent() {
+                    cands.push(dir.join("edl.json"));
+                    if let Some(parent) = dir.parent() {
+                        cands.push(parent.join("edl.json"));
+                    }
+                }
+                let Some(edl_path) = cands.into_iter().find(|p| p.is_file()) else {
+                    return Ok("concat.json salvo (pronto para vollare concat importar)".into());
+                };
+                let py_bins: Vec<String> = std::env::var("VOLLARE_PYTHON")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+                    .into_iter()
+                    .chain(["py", "python3", "python"].into_iter().map(String::from))
+                    .collect();
+                for py in py_bins {
+                    let mut cmd = std::process::Command::new(&py);
+                    cmd.args([
+                        "-m",
+                        "vollare",
+                        "concat",
+                        "importar",
+                        &edl_path.to_string_lossy(),
+                        &concat_path.to_string_lossy(),
+                    ]);
+                    if let Ok(repo) = std::env::var("VOLLARE_REPO") {
+                        if !repo.is_empty() {
+                            cmd.current_dir(repo);
+                        }
+                    }
+                    if let Ok(out) = cmd.output() {
+                        if out.status.success() {
+                            return Ok(format!(
+                                "EDL Vollare sincronizada ({})",
+                                edl_path
+                                    .file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or("edl.json")
+                            ));
+                        }
+                    }
+                }
+                Ok("concat.json salvo (rode vollare concat importar para atualizar a EDL)".into())
+            },
+            move |studio, _, _, result| match result {
+                Ok(msg) => studio.notify(&msg, false),
+                Err(error) => {
+                    studio.dirty = true;
+                    studio.notify(&tf("studio.couldNotSave", &[&error]), true);
+                }
+            },
+        );
+    }
+
     /// The audible clip set, handed to playback whenever the edit changes.
     /// Not while a library file has the speakers: the timeline's sound is
     /// handed back when it lets them go.
@@ -9353,6 +9429,7 @@ impl Studio {
 
         app.set_on_start(self.on_start);
         app.set_project_name(self.project_name.as_str().into());
+        app.set_vollare_project(self.editor.project().has_vollare_meta());
         app.set_project_status(
             if self.dirty {
                 "unsaved changes"

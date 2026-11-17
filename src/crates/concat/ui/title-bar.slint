@@ -148,6 +148,10 @@ export component TitleBar inherits Rectangle {
     /// A view was picked from the add-panel list.
     callback add-pane(kind: PaneKind);
     callback export-clicked();
+    /// True when the open document originated from Super Motor Vollare (`vollareMeta`).
+    in property <bool> vollare-project;
+    /// Saves `concat.json` and synchronises edits back into `edl.json` via `vollare concat importar`.
+    callback vollare-sync-clicked();
 
     height: 32px;
     // The window's ground, not a panel's: the strip is the frame the panes
@@ -272,6 +276,42 @@ export component TitleBar inherits Rectangle {
             HeaderIconButton {
                 glyph: Glyph.settings;
                 clicked => { root.open-settings(); }
+            }
+        }
+
+        if !root.minimal && root.vollare-project: VerticalLayout {
+            alignment: center;
+            padding-left: 4px;
+
+            vollare-btn := Rectangle {
+                width: vollare-lbl.width + vollare-ico.width + 24px;
+                height: 24px;
+                border-radius: Theme.r-sm;
+                background: vollare-touch.has-hover ? #d97706 : #b45309;
+
+                animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+
+                vollare-ico := Icon {
+                    x: 8px;
+                    y: (parent.height - self.height) / 2;
+                    glyph: Glyph.reset;
+                    size: 12px;
+                    tint: #ffffff;
+                }
+
+                vollare-lbl := Text {
+                    x: vollare-ico.x + vollare-ico.width + 5px;
+                    y: (parent.height - self.height) / 2;
+                    text: "Sincronizar EDL";
+                    color: #ffffff;
+                    font-size: Theme.fs;
+                    font-weight: Theme.weight-title;
+                }
+
+                vollare-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.vollare-sync-clicked(); }
+                }
             }
         }
 

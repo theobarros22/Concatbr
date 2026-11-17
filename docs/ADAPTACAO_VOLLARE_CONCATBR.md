@@ -20,15 +20,21 @@
    - O cabeçalho de cada clipe exibe o chip visual Vollare (`IA · TRAVADO` em âmbar para selos obrigatórios, `TRAVADO`, `IA` ou `HUMANO`) sem poluir projetos comuns do Concat (`""`).
 4. **Guias de zona segura `9:16` de legendas no monitor (`preview-pane.slint`, `studio.rs`):**
    - Em timelines verticais (`height > width`) com metadados Vollare (`vollareMeta` / `vollareEdl`), o monitor desenha duas linhas tracejadas âmbar discretas em `y = 0.62` e `y = 0.86` (zona segura de legenda `[0.05, 0.62, 0.95, 0.86]` de `vollare/qa_legenda.py`, abaixo da boca do apresentador e acima do selo de IA) e ativa *snap* magnético ao arrastar/escalar títulos nessa faixa.
-5. **Roundtrip sem perda (`extra` map):**
-   - Todos os campos `vollareId`, `vollareTrilha`, `vollareTipo`, `vollareOrigem`, `vollareTravado`, `vollareT0`, `vollareT1`, `vollareParam`, `vollareAncora` e `vollareMeta` sobrevivem intactos ao salvar no `Concatbr`, permitindo `vollare concat importar` de volta para quadros inteiros na EDL canônica.
+5. **Botão `"Sincronizar EDL"` na barra superior (`title-bar.slint`, `app.slint`, `studio.rs`):**
+   - Visível automaticamente sempre que o projeto possui `vollareMeta` (`Project::has_vollare_meta()`).
+   - Ao clicar em **Sincronizar EDL**, `Studio::sync_vollare_edl()` grava `concat.json` no disco, localiza o `edl.json` canônico (`vollareMeta.edlPath` ou `edl.json` vizinho/pai) e executa `[VOLLARE_PYTHON | py | python3 | python] -m vollare concat importar <edl.json> <concat.json>`, exibindo um *toast* imediato com o resultado da reimportação para quadros inteiros.
+6. **Roundtrip sem perda (`extra` map):**
+   - Todos os campos `vollareId`, `vollareTrilha`, `vollareTipo`, `vollareOrigem`, `vollareTravado`, `vollareT0`, `vollareT1`, `vollareParam`, `vollareAncora` e `vollareMeta` (incluindo `edlPath`) sobrevivem intactos ao salvar no `Concatbr`, permitindo `vollare concat importar` de volta para quadros inteiros na EDL canônica.
 
 ---
 
 ## 2. Como compilar e usar no PC do Theo (Windows + RTX)
 
 ```powershell
-# Compilar o binário desktop + servidor MCP embutido:
+# Opção recomendada pelo Super Motor Vollare (respeita C:\vollare_lock\pc.lock e instala C:\vollare_bin\concatbr.exe):
+pwsh -File H:\PROJETOS\vollare-studio\scripts\compilar_concatbr_windows.ps1 -PastaConcatbr "H:\PROJETOS\Concatbr"
+
+# Compilação manual do binário desktop + servidor MCP embutido:
 cd src
 cargo test -p concat-project
 cargo build --release -p concat
